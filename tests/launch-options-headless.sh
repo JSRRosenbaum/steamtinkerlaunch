@@ -52,7 +52,7 @@ cat > "$TMPDIR/home/.steam/root/userdata/123/config/localconfig.vdf" <<'VDF'
 }
 VDF
 
-env HOME="$TMPDIR/home" PATH="$TMPDIR/bin:$PATH" "$STL" lo prepend 1 'steamtinkerlaunch %command%'
-grep -F '"LaunchOptions"		"steamtinkerlaunch %command% -vulkan"' "$TMPDIR/home/.steam/root/userdata/123/config/localconfig.vdf" >/dev/null
+env HOME="$TMPDIR/home" PATH="$TMPDIR/bin:$PATH" "$STL" lo prepend 1 'DRI_PRIME=1 steamtinkerlaunch %command%'
+grep -F '"LaunchOptions"		"DRI_PRIME=1 steamtinkerlaunch %command% -vulkan"' "$TMPDIR/home/.steam/root/userdata/123/config/localconfig.vdf" >/dev/null
 
 echo 'headless launch-options integration test passed'
