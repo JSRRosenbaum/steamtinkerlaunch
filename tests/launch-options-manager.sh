@@ -16,11 +16,27 @@ listInstalledGameIDs() { printf '123\n456\n'; }
 cat > "$FLCV" <<'VDF'
 "UserLocalConfigStore"
 {
-	"Apps"
+	"Software"
 	{
-		"123"
+		"Valve"
 		{
-			"LaunchOptions"		"-vulkan"
+			"Steam"
+			{
+				"apps"
+				{
+					"123"
+					{
+						"LaunchOptions"		"-vulkan"
+					}
+					"456"
+					{
+					}
+					"789"
+					{
+						"LaunchOptions"		"gamescope -f -- %command%"
+					}
+				}
+			}
 		}
 	}
 }
@@ -45,6 +61,12 @@ commandlineLaunchOptions prepend 123 'steamtinkerlaunch %command%'
 
 commandlineLaunchOptions remove 123 'steamtinkerlaunch %command%'
 [ "$(getLocalConfigLaunchOptions 123)" = '-vulkan' ]
+
+commandlineLaunchOptions prepend 789 'steamtinkerlaunch %command%'
+[ "$(getLocalConfigLaunchOptions 789)" = 'gamescope -f -- %command%' ]
+
+commandlineLaunchOptions prepend 999 'steamtinkerlaunch %command%'
+[ "$(getLocalConfigLaunchOptions 999)" = 'steamtinkerlaunch %command%' ]
 
 commandlineLaunchOptions prepend installed 'steamtinkerlaunch %command%'
 [ "$(getLocalConfigLaunchOptions 123)" = 'steamtinkerlaunch %command% -vulkan' ]

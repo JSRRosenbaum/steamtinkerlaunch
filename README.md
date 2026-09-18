@@ -79,6 +79,8 @@ steamtinkerlaunch launchoptions list installed
 
 This is intentionally an explicit bulk operation: Steam has no hook to add launch options to future installations, so rerun `prepend installed` after installing games.
 
+Games with an existing `%command%` wrapper are left unchanged: nesting wrappers can change argument order or launch the game twice. Manage those entries explicitly.
+
 #### Steam Service Startup Synchronization
 If Steam runs from a systemd user service, synchronize installed games before Steam starts instead of watching `localconfig.vdf` while Steam owns it:
 

@@ -24096,9 +24096,9 @@ function getVdfSection {
 	# This is a very hacky solution to allow 'getNestedVdfSection' to use this function
 	# It needs the start pattern exact match but other functions can't use this
 	if [ -n "$STOPAFTERFIRSTMATCH" ]; then
-		sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
+		sed -n "/^${INDENTEDSTARTPATTERN}[[:space:]]*$/I,/^${INDENTEDENDPATTERN}[[:space:]]*$/I { p; /^${INDENTEDENDPATTERN}[[:space:]]*$/I q }" "$VDF"
 	else
-		sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+		sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}[[:space:]]*$/I p" "$VDF"
 	fi
 }
 
@@ -24314,7 +24314,7 @@ function addVdfSectionValue {
 	VDF="$4"
 
 	VDFSECTIONEND="$( echo "$VDFSECTION" | tail -n1 )"
-	VDFSECTIONENDLINE="$( echo "$VDFSECTION" | grep -in "$VDFSECTIONEND" | cut -d ':' -f1 )"
+	VDFSECTIONENDLINE="$( echo "$VDFSECTION" | wc -l )"
 	VDFSECTIONINSERTLINE="$(( VDFSECTIONENDLINE - 1 ))"
 
 	VDFSECTIONENDINDENTAMT="$( echo "$VDFSECTIONEND" | awk '{print gsub(/\t/,"")}' )"
@@ -24539,8 +24539,8 @@ function updateLocalConfigAppsValue {
 
 function getLocalConfigLaunchOptions {
 	LOAID="$1"
-	LOAPPSECTION="$( getNestedVdfSection "Apps/${LOAID}" "1" "$FLCV" )"
-	if grep -q "^[[:space:]]*\"${LOAID}\"$" <<< "$LOAPPSECTION"; then
+	LOAPPSECTION="$( getNestedVdfSection "Valve/Steam/apps/${LOAID}" "2" "$FLCV" )"
+	if grep -q "^[[:space:]]*\"${LOAID}\"[[:space:]]*$" <<< "$LOAPPSECTION"; then
 		LOVALUE="$( getVdfSectionValue "$LOAPPSECTION" "LaunchOptions" "1" )"
 		printf "%s" "${LOVALUE#\"}" | sed 's/"$//'
 	fi
@@ -24549,7 +24549,30 @@ function getLocalConfigLaunchOptions {
 function updateLocalConfigLaunchOptions {
 	LOAID="$1"
 	LOVALUE="$2"
-	updateLocalConfigAppsValue "$LOAID" "LaunchOptions" "$LOVALUE"
+	LOAPPSECTION="$( getNestedVdfSection "Valve/Steam/apps/${LOAID}" "2" "$FLCV" )"
+
+	if ! grep -q "^[[:space:]]*\"${LOAID}\"[[:space:]]*$" <<< "$LOAPPSECTION"; then
+		LOAPPSSECTION="$( getNestedVdfSection "Valve/Steam/apps" "2" "$FLCV" )"
+		if ! grep -q "^[[:space:]]*\"apps\"[[:space:]]*$" <<< "$LOAPPSSECTION"; then
+			echo "Steam localconfig.vdf has no canonical apps block." >&2
+			return 1
+		fi
+
+		LOAPPINDENT="$( generateVdfIndentString "5" )"
+		LOPROPERTYINDENT="$( generateVdfIndentString "6" )"
+		LOAPPENTRY="$( printf '%s"%s"\n%s{\n%s%s\n%s}' "$LOAPPINDENT" "$LOAID" "$LOAPPINDENT" "$LOPROPERTYINDENT" "$( createVdfPropertyString "LaunchOptions" "$LOVALUE" )" "$LOAPPINDENT" )"
+		UPDATEDLOAPPSSECTION="$( { echo "$LOAPPSSECTION" | sed '$d'; echo "$LOAPPENTRY"; echo "$LOAPPSSECTION" | tail -n1; } )"
+		backupVdfFile "$FLCV"
+		substituteVdfSection "$LOAPPSSECTION" "$UPDATEDLOAPPSSECTION" "$FLCV"
+		return
+	fi
+
+	LOCURRENT="$( getVdfSectionValue "$LOAPPSECTION" "LaunchOptions" "1" )"
+	if [ -n "$LOCURRENT" ]; then
+		editVdfSectionValue "$LOAPPSECTION" "LaunchOptions" "$LOVALUE" "$FLCV"
+	else
+		addVdfSectionValue "$LOAPPSECTION" "LaunchOptions" "$LOVALUE" "$FLCV"
+	fi
 }
 
 function commandlineLaunchOptions {
@@ -24605,6 +24628,8 @@ function commandlineLaunchOptions {
 		elif [ "$LOACTION" == "prepend" ]; then
 			if [[ "$LOCURRENT" == "$LOPREFIX" ]] || [[ "$LOCURRENT" == "$LOPREFIX "* ]]; then
 				writelog "SKIP" "${FUNCNAME[0]} - AppID '$LOAID' already has requested LaunchOptions prefix"
+			elif [[ "$LOCURRENT" == *"%command%"* ]]; then
+				writelog "WARN" "${FUNCNAME[0]} - AppID '$LOAID' already has a command wrapper; leaving its LaunchOptions unchanged"
 			else
 				if [ -n "$LOCURRENT" ]; then
 					LONEW="${LOPREFIX} ${LOCURRENT}"

@@ -42,11 +42,20 @@ VDF
 cat > "$TMPDIR/home/.steam/root/userdata/123/config/localconfig.vdf" <<'VDF'
 "UserLocalConfigStore"
 {
-	"Apps"
+	"Software"
 	{
-		"1"
+		"Valve"
 		{
-			"LaunchOptions"		"-vulkan"
+			"Steam"
+			{
+				"apps"
+				{
+					"1"
+					{
+						"LaunchOptions"		"-vulkan"
+					}
+				}
+			}
 		}
 	}
 }
