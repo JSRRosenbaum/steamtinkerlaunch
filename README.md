@@ -79,6 +79,17 @@ steamtinkerlaunch launchoptions list installed
 
 This is intentionally an explicit bulk operation: Steam has no hook to add launch options to future installations, so rerun `prepend installed` after installing games.
 
+#### Steam Service Startup Synchronization
+If Steam runs from a systemd user service, synchronize installed games before Steam starts instead of watching `localconfig.vdf` while Steam owns it:
+
+```ini
+# ~/.config/systemd/user/steam.service.d/stl-launch-options.conf
+[Service]
+ExecStartPre=-%h/.local/bin/stl-sync-launch-options
+```
+
+The leading `-` makes synchronization best-effort: Steam still starts if SteamTinkerLaunch or its configuration is unavailable. The synchronizer should invoke `steamtinkerlaunch launchoptions prepend installed 'steamtinkerlaunch %command%'`. Steam must fully stop before its next start for the manager to update the file.
+
 ### Game-Specific Use
 When starting a game, a small [Wait Requester](#Wait-Requester) dialog will pop up. This will allow you to access the Main Menu either by pressing the button or pressing the spacebar, or skip to launching the game. By default, the dialog will only stay for two seconds before it times out and launches the game, but this can be configured in the SteamTinkerLaunch settings.
 
