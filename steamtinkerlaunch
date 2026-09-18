@@ -22422,6 +22422,11 @@ function howto {
 	echo "    compat <cmd>                     Will (add|del|get) ${PROGNAME,,} as"
 	echo "                                       Steam compatibility tool"
 	echo "                                       under 'STEAMCOMPATOOLS'"
+	echo "    launchoptions|lo <command>       Manage LaunchOptions for installed Steam games"
+	echo "      list <appid|installed>          Show existing options without changing Steam"
+	echo "      prepend <appid|installed> <cmd> Prefix <cmd> before existing options"
+	echo "      remove <appid|installed> <cmd>  Remove a previously prepended command"
+	echo "                                       <cmd> must contain %command%; Steam must be closed"
 	echo "    configdir                        Open the SteamTinkerLaunch config directory with xdg-open"
 	echo "    createappinfo|cai <id|i|o>       Create raw appinfo for <id>"
 	echo "                                      or for 'installed|i' or 'owned|o' games"
@@ -22702,6 +22707,8 @@ function commandline {
 		else
 			CompatTool "get"
 		fi
+	elif [ "$1" == "launchoptions" ] || [ "$1" == "lo" ]; then
+		commandlineLaunchOptions "${@:2}"
 	elif [ "$1" == "conty" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "up" ] || [ "$2" == "update" ]; then
@@ -24528,6 +24535,94 @@ function updateLocalConfigAppsValue {
 			addVdfSectionValue "${FLCVAPPAID}" "${LCVKEYNAME}" "${LCVKEYVAL}" "${FLCV}"
 		fi
 	fi
+}
+
+function getLocalConfigLaunchOptions {
+	LOAID="$1"
+	LOAPPSECTION="$( getNestedVdfSection "Apps/${LOAID}" "1" "$FLCV" )"
+	if grep -q "^[[:space:]]*\"${LOAID}\"$" <<< "$LOAPPSECTION"; then
+		LOVALUE="$( getVdfSectionValue "$LOAPPSECTION" "LaunchOptions" "1" )"
+		printf "%s" "${LOVALUE#\"}" | sed 's/"$//'
+	fi
+}
+
+function updateLocalConfigLaunchOptions {
+	LOAID="$1"
+	LOVALUE="$2"
+	updateLocalConfigAppsValue "$LOAID" "LaunchOptions" "$LOVALUE"
+}
+
+function commandlineLaunchOptions {
+	LOACTION="$1"
+	LOTARGET="$2"
+	shift 2 2>/dev/null || true
+	LOPREFIX="$*"
+
+	if [ "$LOACTION" != "list" ] && [ "$LOACTION" != "prepend" ] && [ "$LOACTION" != "remove" ]; then
+		echo "Usage: ${PROGCMD} launchoptions <list|prepend|remove> <appid|installed> [command]"
+		return 1
+	fi
+
+	if [ "$LOTARGET" != "installed" ] && ! [[ "$LOTARGET" =~ ^[0-9]+$ ]]; then
+		echo "LaunchOptions target must be a Steam AppID or 'installed'."
+		return 1
+	fi
+
+	if [ "$LOACTION" != "list" ]; then
+		if [ -z "$LOPREFIX" ] || [[ "$LOPREFIX" != *"%command%"* ]] || [[ "$LOPREFIX" == *$'\n'* ]] || [[ "$LOPREFIX" == *\"* ]]; then
+			echo "LaunchOptions command must contain %command% and must not contain quotes or newlines."
+			return 1
+		fi
+
+		if "$PGREP" -x steam >/dev/null; then
+			echo "Close Steam before changing LaunchOptions; Steam would overwrite localconfig.vdf on exit."
+			return 1
+		fi
+	fi
+
+	setSteamPaths
+	if [ ! -f "$FLCV" ]; then
+		echo "No Steam localconfig.vdf found at '$FLCV'."
+		return 1
+	fi
+
+	if [ "$LOTARGET" == "installed" ]; then
+		mapfile -t LOAPPIDS < <( listInstalledGameIDs | sort -u )
+	else
+		LOAPPIDS=( "$LOTARGET" )
+	fi
+
+	if [ "${#LOAPPIDS[@]}" -eq 0 ]; then
+		echo "No installed Steam games found."
+		return
+	fi
+
+	for LOAID in "${LOAPPIDS[@]}"; do
+		LOCURRENT="$( getLocalConfigLaunchOptions "$LOAID" )"
+
+		if [ "$LOACTION" == "list" ]; then
+			printf "%s\t%s\n" "$LOAID" "$LOCURRENT"
+		elif [ "$LOACTION" == "prepend" ]; then
+			if [[ "$LOCURRENT" == "$LOPREFIX" ]] || [[ "$LOCURRENT" == "$LOPREFIX "* ]]; then
+				writelog "SKIP" "${FUNCNAME[0]} - AppID '$LOAID' already has requested LaunchOptions prefix"
+			else
+				if [ -n "$LOCURRENT" ]; then
+					LONEW="${LOPREFIX} ${LOCURRENT}"
+				else
+					LONEW="$LOPREFIX"
+				fi
+				updateLocalConfigLaunchOptions "$LOAID" "$LONEW"
+			fi
+		else
+			if [[ "$LOCURRENT" == "$LOPREFIX" ]]; then
+				updateLocalConfigLaunchOptions "$LOAID" ""
+			elif [[ "$LOCURRENT" == "$LOPREFIX "* ]]; then
+				updateLocalConfigLaunchOptions "$LOAID" "${LOCURRENT#"$LOPREFIX "}"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - AppID '$LOAID' does not have requested LaunchOptions prefix"
+			fi
+		fi
+	done
 }
 
 ### END TEXT-BASED VDF INTERACTION FUNCTIONS
@@ -27148,6 +27243,12 @@ function main {
 
 	writelog "INFO" "${FUNCNAME[0]} - Start creating default configs"
 	createDefaultCfgs "$@"
+
+	if [ "$1" == "launchoptions" ] || [ "$1" == "lo" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running headless LaunchOptions management"
+		commandline "$@"
+		return
+	fi
 
 	listSteamLibraries
 	setSteamLibraryPaths

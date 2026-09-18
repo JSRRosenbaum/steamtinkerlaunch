@@ -63,6 +63,22 @@ On some platforms such as [Steam Deck](https://github.com/sonic2kk/steamtinkerla
 
 It is possible to use SteamTinkerLaunch as a launch option for Proton games, but this is **not** the intended use-case.
 
+#### Bulk Native Launch Options
+`launchoptions` manages the Steam `LaunchOptions` values for installed games without replacing their compatibility tool. It preserves existing options by prepending a wrapper command and always requires Steam to be closed before it writes `localconfig.vdf`.
+
+```sh
+# Route every currently installed game through SteamTinkerLaunch.
+steamtinkerlaunch launchoptions prepend installed 'steamtinkerlaunch %command%'
+
+# Exempt one AppID again.
+steamtinkerlaunch launchoptions remove 123456 'steamtinkerlaunch %command%'
+
+# Inspect managed options.
+steamtinkerlaunch launchoptions list installed
+```
+
+This is intentionally an explicit bulk operation: Steam has no hook to add launch options to future installations, so rerun `prepend installed` after installing games.
+
 ### Game-Specific Use
 When starting a game, a small [Wait Requester](#Wait-Requester) dialog will pop up. This will allow you to access the Main Menu either by pressing the button or pressing the spacebar, or skip to launching the game. By default, the dialog will only stay for two seconds before it times out and launches the game, but this can be configured in the SteamTinkerLaunch settings.
 
